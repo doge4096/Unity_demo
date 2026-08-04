@@ -1,0 +1,67 @@
+# ===== Unity 编辑器 & 生成文件 =====
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+
+# ===== IDE / 编辑器 =====
+.idea/
+.vs/
+.vscode/
+*.csproj
+*.sln
+*.user
+*.userosscache
+*.suo
+*.userprefs
+
+# Rider
+*.sln.DotSettings.user
+
+# ===== 操作系统 =====
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ===== Unity 资产 =====
+*.unitypackage
+*.asset.meta.bak
+
+# ===== 构建产物 =====
+*.apk
+*.aab
+*.ipa
+*.app
+*.exe
+*.pdb
+
+# ===== 自动生成的资源 =====
+# 保留 .meta 文件（Unity 必须），但以下自动生成的不需要
+*.pidb.meta
+*.boo.meta
+*.svd.meta
+*.pdb.meta
+*.mdb.meta
+
+# ===== 崩溃/错误报告 =====
+sysinfo.txt
+crashlytics-build.properties
+
+# ===== 第三方插件（按需取消注释）=====
+# Assets/Plugins/
+
+# ===== 项目特定 =====
+# 大文件目录（资源包等）
+Assets/StreamingAssets/*.zip
+Assets/StreamingAssets/*.unitypackage
+
+# ===== Claude Code 本地配置(个人配置,不提交)=====
+.claude/settings.local.json
+
+# ===== 截图目录(调试用,不提交)=====
+Assets/Screenshots/
