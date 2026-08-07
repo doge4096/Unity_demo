@@ -23,6 +23,9 @@ public abstract class CharacterBase : MonoBehaviour, IDamageable
     public Animator Animator;       // 等导入模型后拖入，当前可为 null
     public CharacterController Controller;
 
+    [Header("格挡")]
+    public bool IsBlocking;         // 格挡状态（PlayerController 按住右键控制），格挡时减免 90% 伤害
+
     // 公开属性（Buff 系统需要读写）
     public int MaxHealth
     {
@@ -72,12 +75,37 @@ public abstract class CharacterBase : MonoBehaviour, IDamageable
 
         if (Animator == null)
             Animator = GetComponentInChildren<Animator>();
+
+        // 强制关闭 root motion：动画不驱动角色位移（位移由 PlayerController 控制），
+        // 避免角色被动画带着跑、相机跟着异常移动
+        if (Animator != null)
+            Animator.applyRootMotion = false;
     }
 
     /// <summary>受到伤害（IDamageable 实现）</summary>
     public virtual void TakeDamage(int amount, GameObject source = null)
     {
         if (IsDead) return;
+
+        // 格挡：减免 90% 伤害，播放格挡受击动画（Block 状态内触发 Hit → BlockHit）
+        if (IsBlocking)
+        {
+            int blockedDamage = Mathf.Max(1, Mathf.RoundToInt(amount * 0.1f));
+            currentHealth -= blockedDamage;
+            OnDamaged?.Invoke();
+
+            if (Animator != null)
+                Animator.SetTrigger("Hit");
+
+            Debug.Log($"[{gameObject.name}] 格挡！受到 {blockedDamage} 点伤害（减免90%）HP: {currentHealth}/{maxHealth}");
+
+            if (currentHealth <= 0)
+            {
+                currentHealth = 0;
+                Die();
+            }
+            return;
+        }
 
         // 防御减伤：每点防御减少 0.5% 伤害，最多减免 75%
         float reduction = Mathf.Clamp(defense * 0.005f, 0f, 0.75f);
