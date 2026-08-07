@@ -1,7 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('success:', d.get\\('success'\\)\\); print\\('instanceId:', d.get\\('result',{}\\).get\\('instanceId','?'\\)\\)\")"
-    ]
-  }
-}

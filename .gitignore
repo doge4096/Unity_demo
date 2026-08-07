@@ -65,3 +65,4 @@ Assets/StreamingAssets/*.unitypackage
 
 # ===== 截图目录(调试用,不提交)=====
 Assets/Screenshots/
+.claude/
