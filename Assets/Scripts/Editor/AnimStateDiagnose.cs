@@ -23,10 +23,10 @@ public static class AnimStateDiagnose
         foreach (var a in Resources.FindObjectsOfTypeAll<Animator>())
         {
             if (a.runtimeAnimatorController != null &&
-                a.runtimeAnimatorController.name == "MeleeAnimator")
+                (a.runtimeAnimatorController.name.Contains("Melee") || a.runtimeAnimatorController.name.Contains("Ranged")))
             {
                 anim = a;
-                sb.AppendLine($"找到 Animator: {a.gameObject.name} (active={a.gameObject.activeInHierarchy})");
+                sb.AppendLine($"找到 Animator: {a.gameObject.name} controller={a.runtimeAnimatorController.name} (active={a.gameObject.activeInHierarchy})");
                 break;
             }
         }
@@ -155,6 +155,16 @@ public static class AnimStateDiagnose
                 sb.AppendLine($"  [{i}] '{paths[i]}'");
         }
 
+        // 模型腰部骨骼映射检查（Chest/UpperChest 错位会导致腰部扭曲）
+        if (anim != null && anim.avatar != null)
+        {
+            foreach (var b in new[] { HumanBodyBones.Spine, HumanBodyBones.Chest, HumanBodyBones.UpperChest, HumanBodyBones.Neck })
+            {
+                var t = anim.GetBoneTransform(b);
+                sb.AppendLine("模型映射 " + b + " -> " + (t != null ? t.name : "NULL!"));
+            }
+        }
+
         // 打印模型骨骼树完整路径（确认 mask transform 路径的基准）
         if (anim != null)
         {
@@ -272,6 +282,183 @@ public static class AnimStateDiagnose
 
         string outPath = "D:/Project/unity/interview/Assets/Screenshots/anim_state.txt";
         File.WriteAllText(outPath, sb.ToString());
+
+        // 幅度量化：播放 Run 连续采样腿/腰旋转范围
+        if (anim != null && Application.isPlaying)
+        {
+            anim.SetFloat("Speed", 1f);
+            float start = Time.realtimeSinceStartup;
+            var amp = new System.Text.StringBuilder();
+            amp.AppendLine("== 幅度采样（Run, 20帧）==");
+            int frame = 0;
+            EditorApplication.update += AmpWatch;
+            void AmpWatch()
+            {
+                if (Time.realtimeSinceStartup - start < 0.5f) return;
+                frame++;
+                var leg = anim.transform.Find("mixamorig:Hips/mixamorig:LeftUpLeg");
+                var spine = anim.transform.Find("mixamorig:Hips/mixamorig:Spine/mixamorig:Spine1/mixamorig:Spine2");
+                if (leg != null)
+                {
+                    string spineX = spine != null ? spine.localEulerAngles.x.ToString("F1") : "?";
+                    amp.AppendLine("F" + frame + ": legX=" + leg.localEulerAngles.x.ToString("F1") + " spineX=" + spineX);
+                }
+                if (frame >= 20)
+                {
+                    EditorApplication.update -= AmpWatch;
+                    File.WriteAllText("D:/Project/unity/interview/Assets/Screenshots/anim_amp.txt", amp.ToString());
+                }
+            }
+        }
+
+        // 攻击全程腰部/腿部旋转范围采样（Humanoid 转换是否放大幅度）
+        if (anim != null && Application.isPlaying)
+        {
+            var chest = anim.transform.Find("mixamorig:Hips/mixamorig:Spine/mixamorig:Spine1/mixamorig:Spine2");
+            var leg = anim.transform.Find("mixamorig:Hips/mixamorig:LeftUpLeg");
+            if (chest != null)
+            {
+                anim.SetInteger("Combo", 1);
+                anim.ResetTrigger("Attack");
+                anim.SetTrigger("Attack");
+                float start = Time.realtimeSinceStartup;
+                var amp = new System.Text.StringBuilder();
+                amp.AppendLine("== attack1 全程腰/腿旋转 ==");
+                int f = 0;
+                EditorApplication.update += AmpWatch;
+                void AmpWatch()
+                {
+                    if (Time.realtimeSinceStartup - start < 0.25f) return;
+                    f++;
+                    if (f % 8 == 0)
+                    {
+                        string legS = leg != null ? leg.localEulerAngles.x.ToString("F0") : "?";
+                        string chestS = chest.localEulerAngles.x.ToString("F0");
+                        string chestY = chest.localEulerAngles.y.ToString("F0");
+                        amp.AppendLine("F" + f + ": legX=" + legS + " chestX=" + chestS + " chestY=" + chestY);
+                    }
+                    if (f >= 64)
+                    {
+                        EditorApplication.update -= AmpWatch;
+                        File.WriteAllText("D:/Project/unity/interview/Assets/Screenshots/anim_attack_amp.txt", amp.ToString());
+                    }
+                }
+            }
+        }
+
+        // 攻击中手/脚/头世界位置采样（判断姿势是否扭曲：位置错位）
+        if (anim != null && Application.isPlaying)
+        {
+            var rHand = anim.transform.Find("mixamorig:Hips/mixamorig:Spine/mixamorig:Spine1/mixamorig:Spine2/mixamorig:RightShoulder/mixamorig:RightArm/mixamorig:RightForeArm/mixamorig:RightHand");
+            var lHand = anim.transform.Find("mixamorig:Hips/mixamorig:Spine/mixamorig:Spine1/mixamorig:Spine2/mixamorig:LeftShoulder/mixamorig:LeftArm/mixamorig:LeftForeArm/mixamorig:LeftHand");
+            var rFoot = anim.transform.Find("mixamorig:Hips/mixamorig:RightUpLeg/mixamorig:RightLeg/mixamorig:RightFoot");
+            var head = anim.transform.Find("mixamorig:Hips/mixamorig:Spine/mixamorig:Spine1/mixamorig:Spine2/mixamorig:Neck/mixamorig:Head");
+            if (rHand != null)
+            {
+                anim.SetInteger("Combo", 1);
+                anim.ResetTrigger("Attack");
+                anim.SetTrigger("Attack");
+                float start = Time.realtimeSinceStartup;
+                var pos = new System.Text.StringBuilder();
+                pos.AppendLine("== attack1 骨骼世界位置 ==");
+                int f = 0;
+                EditorApplication.update += PosWatch;
+                void PosWatch()
+                {
+                    if (Time.realtimeSinceStartup - start < 0.25f) return;
+                    f++;
+                    if (f % 10 == 0)
+                    {
+                        string rh = rHand.position.ToString("F2");
+                        string lh = lHand != null ? lHand.position.ToString("F2") : "?";
+                        string rf = rFoot != null ? rFoot.position.ToString("F2") : "?";
+                        string hd = head != null ? head.position.ToString("F2") : "?";
+                        pos.AppendLine("F" + f + ": RHand=" + rh + " LHand=" + lh + " RFoot=" + rf + " Head=" + hd);
+                    }
+                    if (f >= 50)
+                    {
+                        EditorApplication.update -= PosWatch;
+                        File.WriteAllText("D:/Project/unity/interview/Assets/Screenshots/anim_pos.txt", pos.ToString());
+                    }
+                }
+            }
+        }
+
+        // 攻击时 Hips 骨骼世界位置采样（排查飞起来：骨骼 Y 是否被动画驱动）
+        if (anim != null && Application.isPlaying)
+        {
+            var hips = anim.transform.Find("mixamorig:Hips");
+            if (hips != null)
+            {
+                anim.SetInteger("Combo", 1);
+                anim.ResetTrigger("Attack");
+                anim.SetTrigger("Attack");
+                float start = Time.realtimeSinceStartup;
+                var fly = new System.Text.StringBuilder();
+                fly.AppendLine("== 攻击时 Hips 世界位置 ==");
+                int f = 0;
+                EditorApplication.update += FlyWatch;
+                void FlyWatch()
+                {
+                    if (Time.realtimeSinceStartup - start < 0.3f) return;
+                    f++;
+                    fly.AppendLine("F" + f + ": HipsY=" + hips.position.y.ToString("F3") + " charY=" + anim.transform.position.y.ToString("F3"));
+                    if (f >= 15)
+                    {
+                        EditorApplication.update -= FlyWatch;
+                        File.WriteAllText("D:/Project/unity/interview/Assets/Screenshots/anim_fly.txt", fly.ToString());
+                    }
+                }
+            }
+        }
+
+        // attack1 开头帧采样（判断是否 T-pose：Hips Y + 手臂姿势）
+        if (anim != null && Application.isPlaying)
+        {
+            var hips = anim.transform.Find("mixamorig:Hips");
+            var arm = anim.transform.Find("mixamorig:Hips/mixamorig:Spine/mixamorig:Spine1/mixamorig:Spine2/mixamorig:LeftShoulder/mixamorig:LeftArm");
+            if (hips != null)
+            {
+                anim.SetInteger("Combo", 1);
+                anim.ResetTrigger("Attack");
+                anim.SetTrigger("Attack");
+                float start = Time.realtimeSinceStartup;
+                var tp = new System.Text.StringBuilder();
+                tp.AppendLine("== attack1 开头帧采样 ==");
+                int f = 0;
+                EditorApplication.update += TpWatch;
+                void TpWatch()
+                {
+                    if (Time.realtimeSinceStartup - start < 0.15f) return;
+                    f++;
+                    string armStr = arm != null ? arm.localEulerAngles.ToString("F0") : "?";
+                    tp.AppendLine("F" + f + ": hipsY=" + hips.position.y.ToString("F3") + " arm=" + armStr + " state=" + anim.GetCurrentAnimatorStateInfo(0).shortNameHash);
+                    if (f >= 12)
+                    {
+                        EditorApplication.update -= TpWatch;
+                        File.WriteAllText("D:/Project/unity/interview/Assets/Screenshots/anim_tpose.txt", tp.ToString());
+                    }
+                }
+            }
+        }
+
+        // 根运动幅度采样（排查腰部/位移异常：deltaPosition/deltaRotation）
+        if (anim != null && Application.isPlaying)
+        {
+            anim.Play("Run", 0, 0f);
+            float start = Time.realtimeSinceStartup;
+            var rm = new System.Text.StringBuilder();
+            rm.AppendLine("== 根运动采样（Run）==");
+            EditorApplication.update += RmWatch;
+            void RmWatch()
+            {
+                if (Time.realtimeSinceStartup - start < 0.5f) return;
+                EditorApplication.update -= RmWatch;
+                rm.AppendLine($"deltaPosition={anim.deltaPosition} 幅度={anim.deltaPosition.magnitude:F3}");
+                rm.AppendLine($"deltaRotation={anim.deltaRotation.eulerAngles} 幅度={anim.deltaRotation.eulerAngles.magnitude:F2}");
+                File.WriteAllText("D:/Project/unity/interview/Assets/Screenshots/anim_root_motion.txt", rm.ToString());
+            }
+        }
 
         // 强制播放 + 间隔采样：验证动画是否真正驱动骨骼（Humanoid 曲线是否有效）
         if (anim != null && Application.isPlaying)

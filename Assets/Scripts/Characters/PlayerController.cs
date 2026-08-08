@@ -46,7 +46,7 @@ public class PlayerController : MonoBehaviour
 
     // 冲刺（Shift 切换开关）
     private bool _isSprinting;                      // 当前是否冲刺
-    private const float SprintMultiplier = 1.5f;    // 冲刺速度倍率（普通速度 × 1.5）
+    private const float SprintMultiplier = 2.4f;    // 冲刺速度倍率（普通 2.5 × 2.4 ≈ 6，匹配跑步动画）
     private const float WalkAnimSpeed = 0.4f;       // 走路动画 Speed 参数（落在 Walk 状态区间 0.1~0.5 内）
 
     // 瞄准（远程）
@@ -169,6 +169,19 @@ public class PlayerController : MonoBehaviour
     {
         var cc = _currentCharacter.Controller;
 
+        // 攻击中锁定移动：等攻击动画播完再动（移动键保持输入，解锁后立即响应）
+        // 保持 Speed 参数不变（下半身继续播当前移动/待机动画——攻击是分层播放的）
+        // 同时跟随攻击动画的水平位移（跨步挥砍），脚不滑动
+        if (_currentCharacter is MeleeCharacter meleeChar && meleeChar.IsAttacking)
+        {
+            if (_currentCharacter.Animator != null)
+            {
+                var dp = _currentCharacter.Animator.deltaPosition;
+                cc.Move(new Vector3(dp.x, 0f, dp.z));   // 只应用水平位移（垂直由重力处理）
+            }
+            return;
+        }
+
         // Shift 切换冲刺模式（按一下开，再按一下关）
         if (Input.GetKeyDown(KeyCode.LeftShift) || Input.GetKeyDown(KeyCode.RightShift))
         {
@@ -204,8 +217,9 @@ public class PlayerController : MonoBehaviour
                 _currentCharacter.transform.rotation = Quaternion.Euler(0f, angle, 0f);
             }
 
-            // 冲刺速度 = 角色移动速度 × 1.5；普通速度保持原样
-            float currentSpeed = _isSprinting
+            // 冲刺速度 = 角色移动速度 × 1.5；格挡中强制走路（不能冲刺）
+            bool blocking = _currentCharacter.IsBlocking;
+            float currentSpeed = (_isSprinting && !blocking)
                 ? _currentCharacter.MoveSpeed * SprintMultiplier
                 : _currentCharacter.MoveSpeed;
 
@@ -213,10 +227,10 @@ public class PlayerController : MonoBehaviour
             Vector3 motion = moveDir * currentSpeed + Vector3.up * _verticalVelocity;
             cc.Move(motion * Time.deltaTime);
 
-            // 动画参数：走路 0.4（Walk 状态），冲刺 1.0（Run 状态，阈值 >0.5）
+            // 动画参数：走路 0.4（Walk 状态），冲刺 1.0（Run 状态，阈值 >0.5）；格挡中走路
             if (_currentCharacter.Animator != null)
             {
-                _currentCharacter.Animator.SetFloat(SpeedParam, _isSprinting ? 1f : WalkAnimSpeed);
+                _currentCharacter.Animator.SetFloat(SpeedParam, (_isSprinting && !blocking) ? 1f : WalkAnimSpeed);
 
                 // 动画播放速度倍率 = 当前速度 / 普通速度（走路 1.0、冲刺 1.5，随速度变化）
                 float animSpeed = currentSpeed / _currentCharacter.MoveSpeed;
@@ -246,7 +260,32 @@ public class PlayerController : MonoBehaviour
         if (_currentCharacter == null || _currentCharacter.IsDead) return;
         if (!_currentCharacter.CanAttack) return;
 
+        // 攻击前转向鼠标方向（射线与角色所在高度的水平面求交）
+        FaceMouseDirection();
+
         _currentCharacter.PerformAttack();
+    }
+
+    /// <summary>让角色面向鼠标在屏幕上的方向</summary>
+    private void FaceMouseDirection()
+    {
+        if (cameraTransform == null) return;
+        var cam = cameraTransform.GetComponent<Camera>();
+        if (cam == null) return;
+
+        var ray = cam.ScreenPointToRay(Input.mousePosition);
+        var plane = new Plane(Vector3.up, _currentCharacter.transform.position);
+        if (plane.Raycast(ray, out float dist))
+        {
+            var hitPoint = ray.GetPoint(dist);
+            var dir = hitPoint - _currentCharacter.transform.position;
+            dir.y = 0f;
+            if (dir.sqrMagnitude > 0.01f)
+            {
+                var targetRot = Quaternion.LookRotation(dir.normalized);
+                _currentCharacter.transform.rotation = targetRot;
+            }
+        }
     }
 
     /// <summary>格挡（按住鼠标右键）</summary>

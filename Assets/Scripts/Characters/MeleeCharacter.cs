@@ -18,6 +18,9 @@ public class MeleeCharacter : CharacterBase
     private float _comboResetTime = 1.5f;               // 连击重置时间
     private float _lastComboTime;
 
+    /// <summary>攻击中（锁定移动，等动画播完再动）</summary>
+    public bool IsAttacking { get; private set; }
+
     protected override void Awake()
     {
         base.Awake();
@@ -51,6 +54,8 @@ public class MeleeCharacter : CharacterBase
     /// <summary>近战攻击：扇形挥砍</summary>
     public override void PerformAttack()
     {
+        // 攻击中不能再次攻击（第一段没播完不能触发下一段，连击不取消当前段）
+        if (IsAttacking) return;
         if (!CanAttack) return;
         ResetAttackCooldown();
 
@@ -83,7 +88,19 @@ public class MeleeCharacter : CharacterBase
             Animator.SetTrigger("Attack");
         }
 
+        // 攻击锁定：动画播放期间不能移动（连击会重新锁定）
+        IsAttacking = true;
+        if (gameObject.activeInHierarchy)
+            StartCoroutine(UnlockAttack());
+
         Debug.Log($"[MeleeCharacter] 第{_currentCombo}击！伤害: {finalDamage}");
+    }
+
+    /// <summary>攻击动画播完（约 1 秒，覆盖最长攻击段）后解锁移动和连击</summary>
+    private System.Collections.IEnumerator UnlockAttack()
+    {
+        yield return new WaitForSeconds(1.0f);
+        IsAttacking = false;
     }
 
     /// <summary>简易近战检测（没有 MeleeWeapon 组件时的兜底方案）</summary>
