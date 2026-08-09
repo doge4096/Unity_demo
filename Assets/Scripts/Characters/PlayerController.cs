@@ -47,6 +47,7 @@ public class PlayerController : MonoBehaviour
     // 冲刺（Shift 切换开关）
     private bool _isSprinting;                      // 当前是否冲刺
     private const float SprintMultiplier = 2.4f;    // 冲刺速度倍率（普通 2.5 × 2.4 ≈ 6，匹配跑步动画）
+    [SerializeField] private float sprintAnimSpeed = 1.2f;  // 冲刺时的动画播放速度（走路 1.0 → 冲刺此值，可调）
     private const float WalkAnimSpeed = 0.4f;       // 走路动画 Speed 参数（落在 Walk 状态区间 0.1~0.5 内）
 
     // 瞄准（远程）
@@ -232,8 +233,10 @@ public class PlayerController : MonoBehaviour
             {
                 _currentCharacter.Animator.SetFloat(SpeedParam, (_isSprinting && !blocking) ? 1f : WalkAnimSpeed);
 
-                // 动画播放速度倍率 = 当前速度 / 普通速度（走路 1.0、冲刺 1.5，随速度变化）
-                float animSpeed = currentSpeed / _currentCharacter.MoveSpeed;
+                // 动画播放速度随实际移动速度变化：走路 1.0 倍 → 冲刺 sprintAnimSpeed 倍（线性插值）
+                float sprintSpeed = _currentCharacter.MoveSpeed * SprintMultiplier;
+                float animSpeed = Mathf.Lerp(1f, sprintAnimSpeed,
+                    Mathf.InverseLerp(_currentCharacter.MoveSpeed, sprintSpeed, currentSpeed));
                 _currentCharacter.Animator.SetFloat(AnimSpeedParam, animSpeed);
 
                 // 远程角色瞄准移动方向（AimMove Blend Tree 用）
