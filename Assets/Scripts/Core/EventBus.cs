@@ -72,4 +72,5 @@ public static class EventBus
     public const string ON_RUN_ENDED       = "OnRunEnded";
     public const string ON_CHARACTER_SWITCHED = "OnCharacterSwitched";
     public const string ON_HEALTH_CHANGED  = "OnHealthChanged";
+    public const string ON_MELEE_HIT       = "OnMeleeHit"; // 近战武器命中（准星扩张反馈用）
 }

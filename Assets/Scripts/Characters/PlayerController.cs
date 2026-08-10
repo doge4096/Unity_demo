@@ -22,7 +22,9 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private int maxJumps = 2;                 // 最大跳跃次数（2 = 二段跳）
 
     [Header("动画速度（代码统一配置，Inspector 可调）")]
-    [SerializeField] private float attackAnimSpeed = 1f;   // 攻击动画速度（近战 3 段）
+    [SerializeField] private float attack1AnimSpeed = 2.5f; // 第1段攻击动画速度——素材 2.4s/段太慢，提速让连击间隔小于连击重置窗口（1.5s）
+    [SerializeField] private float attack2AnimSpeed = 2.5f; // 第2段攻击动画速度（各段可单独调整）
+    [SerializeField] private float attack3AnimSpeed = 2.5f; // 第3段攻击动画速度（各段可单独调整）
     [SerializeField] private float jumpAnimSpeed = 1f;     // 跳跃动画速度（起跳/空中/落地）
     [SerializeField] private float blockAnimSpeed = 1f;    // 格挡动画速度
     [SerializeField] private float hitAnimSpeed = 1f;      // 受击动画速度
@@ -93,7 +95,9 @@ public class PlayerController : MonoBehaviour
         if (_currentCharacter?.Animator == null) return;
         var anim = _currentCharacter.Animator;
 
-        anim.SetFloat("AttackSpeed", attackAnimSpeed);
+        // 攻速：三段攻击动画速度交给角色（乘攻速倍率后写入 AttackSpeed 参数，道具加攻速时角色自己 RefreshAttackSpeed）
+        _currentCharacter.AttackAnimSpeeds = new float[] { attack1AnimSpeed, attack2AnimSpeed, attack3AnimSpeed };
+        _currentCharacter.RefreshAttackSpeed();
         anim.SetFloat("JumpSpeed", jumpAnimSpeed);
         anim.SetFloat("BlockSpeed", blockAnimSpeed);
         anim.SetFloat("HitSpeed", hitAnimSpeed);
@@ -158,6 +162,9 @@ public class PlayerController : MonoBehaviour
             if (_currentCharacter.Animator != null)
             {
                 _currentCharacter.Animator.SetTrigger(JumpLandParam);
+                // 清掉残留的起跳 trigger：二段跳时状态机在 JumpLoop 无过渡消费 JumpStart，
+                // 若残留会被落地后 Walk/Run/Idle → JumpStart 过渡误消费，导致落地后再次跳起悬浮动画
+                _currentCharacter.Animator.ResetTrigger(JumpStartParam);
             }
 
             // 落地动画播完后解除标记
@@ -176,17 +183,25 @@ public class PlayerController : MonoBehaviour
     {
         var cc = _currentCharacter.Controller;
 
-        // 攻击中锁定移动：等攻击动画播完再动（移动键保持输入，解锁后立即响应）
-        // 保持 Speed 参数不变（下半身继续播当前移动/待机动画——攻击是分层播放的）
-        // 同时跟随攻击动画的水平位移（跨步挥砍），脚不滑动
+        // 攻击中移动处理（分层攻击，按是否按着移动键分两种）：
+        // - 站立攻击（没按移动键）：锁定移动，等攻击动画播完（跟随攻击动画的跨步位移，脚不滑动）
+        // - 移动攻击（按着移动键）：不锁定，继续移动——下半身照常跑步，上半身由 UpperBody 层播挥砍
         if (_currentCharacter is MeleeCharacter meleeChar && meleeChar.IsAttacking)
         {
-            if (_currentCharacter.Animator != null)
+            bool movingInput = Mathf.Abs(Input.GetAxis("Horizontal")) > 0.1f ||
+                               Mathf.Abs(Input.GetAxis("Vertical")) > 0.1f;
+            if (!movingInput)
             {
-                var dp = _currentCharacter.Animator.deltaPosition;
-                cc.Move(new Vector3(dp.x, 0f, dp.z));   // 只应用水平位移（垂直由重力处理）
+                // Speed 归 0：站立攻击/移动攻击松开移动键时下半身立即回 Idle（避免原地跑步）
+                if (_currentCharacter.Animator != null)
+                    _currentCharacter.Animator.SetFloat(SpeedParam, 0f);
+
+                // 水平跟随攻击动画的跨步位移（脚不滑动），垂直照常应用重力速度——跳跃中攻击也会正常下落/落地，不会悬浮
+                var dp = _currentCharacter.Animator != null ? _currentCharacter.Animator.deltaPosition : Vector3.zero;
+                cc.Move(new Vector3(dp.x, 0f, dp.z) + Vector3.up * _verticalVelocity * Time.deltaTime);
+                return;
             }
-            return;
+            // 移动攻击：继续走下方移动逻辑（Speed 参数照常设置，下半身播跑步动画）
         }
 
         // Shift 切换冲刺模式（按一下开，再按一下关）
@@ -262,14 +277,20 @@ public class PlayerController : MonoBehaviour
         }
     }
 
-    /// <summary>攻击（鼠标左键 / Ctrl）</summary>
+    /// <summary>攻击（鼠标左键 / Ctrl）——按住自动连续攻击</summary>
     private void HandleAttack()
     {
-        if (!Input.GetMouseButtonDown(0) && !Input.GetKeyDown(KeyCode.LeftControl)) return;
+        // 按住触发：点按 = 单发；按住 = 连续攻击
+        // 近战：当前段动画播完（IsAttacking 解锁）后下一帧自动接下一段，直到松开
+        // 远程：按攻击冷却自动连射
+        if (!Input.GetMouseButton(0) && !Input.GetKey(KeyCode.LeftControl)) return;
         if (_currentCharacter == null || _currentCharacter.IsDead) return;
         if (!_currentCharacter.CanAttack) return;
 
-        // 攻击前转向鼠标方向（射线与角色所在高度的水平面求交）
+        // 近战攻击锁：段动画播完前不触发下一段（解锁后按住状态会自动续段）
+        if (_currentCharacter is MeleeCharacter melee && melee.IsAttacking) return;
+
+        // 攻击前转向鼠标方向（连击时每段开始都面向鼠标）
         FaceMouseDirection();
 
         _currentCharacter.PerformAttack();

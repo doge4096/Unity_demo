@@ -15,6 +15,10 @@ public abstract class CharacterBase : MonoBehaviour, IDamageable
     [SerializeField] protected float attackCooldown = 0.5f;
     [SerializeField] protected float defense = 0f;
 
+    [Header("攻速(道具/Buff 可修改)")]
+    [SerializeField] protected float attackSpeedMultiplier = 1f;   // 攻速倍率:1=原始速度,2=两倍速(道具/技能加成)
+    [SerializeField] protected float[] attackAnimSpeeds = new float[3] { 1f, 1f, 1f };  // 第1/2/3段攻击动画基础速度(PlayerController 配置,乘倍率后写入 AttackSpeed 参数)
+
     [Header("运行时状态")]
     [SerializeField] protected int currentHealth;
     protected float lastAttackTime = -999f;
@@ -57,10 +61,32 @@ public abstract class CharacterBase : MonoBehaviour, IDamageable
         get => defense;
         set => defense = Mathf.Max(0f, value);
     }
+    public float AttackSpeedMultiplier
+    {
+        get => attackSpeedMultiplier;
+        set => attackSpeedMultiplier = Mathf.Max(0.1f, value);
+    }
+    /// <summary>第1/2/3段攻击动画基础速度（PlayerController 配置，乘攻速倍率后写入 AttackSpeed 参数）</summary>
+    public float[] AttackAnimSpeeds
+    {
+        get => attackAnimSpeeds;
+        set => attackAnimSpeeds = value;
+    }
+
+    /// <summary>实际攻击冷却 = 基础冷却 ÷ 攻速倍率（攻速越快，攻击间隔越短）</summary>
+    public float EffectiveAttackCooldown => attackCooldown / Mathf.Max(0.1f, attackSpeedMultiplier);
+
+    /// <summary>攻速倍率变化后调用：重算 AttackSpeed 动画参数（动画播放速度跟随攻速）。默认按第1段速度，子类可覆写按当前段设置</summary>
+    public virtual void RefreshAttackSpeed()
+    {
+        if (Animator != null && attackAnimSpeeds.Length > 0)
+            Animator.SetFloat("AttackSpeed", attackAnimSpeeds[0] * attackSpeedMultiplier);
+    }
+
     public int CurrentHealth => currentHealth;
     public float HealthPercent => (float)currentHealth / maxHealth;
     public bool IsDead => currentHealth <= 0;
-    public bool CanAttack => Time.time - lastAttackTime >= attackCooldown;
+    public bool CanAttack => Time.time - lastAttackTime >= EffectiveAttackCooldown;
 
     // 事件（可用 EventBus 代替，保留 UnityEvent 便于编辑器连线）
     public UnityEvent OnDamaged;

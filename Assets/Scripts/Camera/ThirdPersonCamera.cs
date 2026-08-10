@@ -13,7 +13,7 @@ public class ThirdPersonCamera : MonoBehaviour
     [Header("相机参数")]
     [SerializeField] private float distance = 4f;           // 相机距离
     [SerializeField] private float heightOffset = 2f;       // 高度偏移
-    [SerializeField] private float rotationSpeed = 5f;      // 鼠标旋转灵敏度
+    [SerializeField] private float rotationSpeed = 8f;      // 鼠标旋转灵敏度（默认值，运行时实际值取设置面板「镜头速度」，玩家可调）
     [SerializeField] private float minPitch = -30f;         // 最低俯角
     [SerializeField] private float maxPitch = 70f;          // 最高仰角
 
@@ -87,8 +87,11 @@ public class ThirdPersonCamera : MonoBehaviour
     private void HandleInput()
     {
         // 鼠标移动控制水平/垂直视角
-        _yaw += Input.GetAxis("Mouse X") * rotationSpeed;
-        _pitch -= Input.GetAxis("Mouse Y") * rotationSpeed;
+        // 灵敏度取设置面板「镜头速度」（玩家可调，PlayerPrefs 持久化）；面板未初始化时退回场景值
+        float speed = SettingsPanel.CameraSpeedSetting;
+        if (speed <= 0f) speed = rotationSpeed;
+        _yaw += Input.GetAxis("Mouse X") * speed;
+        _pitch -= Input.GetAxis("Mouse Y") * speed;
         _pitch = Mathf.Clamp(_pitch, minPitch, maxPitch);
 
         // 滚轮缩放

@@ -41,10 +41,10 @@ public class MeleeWeapon : MonoBehaviour
         Vector3 origin = transform.position;
         Vector3 forward = transform.forward;
 
-        // 播放挥砍弧线特效
+        // 播放挥砍特效
         if (attackVFX != null)
         {
-            attackVFX.PlaySlashVFX(range, attackAngle, comboIndex);
+            attackVFX.PlaySlashVFX(range, comboIndex);
         }
 
         // 球形范围检测（粗筛）
@@ -60,8 +60,11 @@ public class MeleeWeapon : MonoBehaviour
             if (hit.transform.root == transform.root) continue;
             if (hitRoots.Contains(hit.transform.root)) continue;
 
-            // 角度判定（精确筛选）
+            // 角度判定（精确筛选）——只看水平方向：
+            // 武器挂点与目标存在高度差时（武器悬空/目标高低起伏），垂直夹角会把角度撑大导致打不中，
+            // 地面战斗的扇形挥砍只关心水平朝向
             Vector3 dirToTarget = (hit.transform.position - origin).normalized;
+            dirToTarget.y = 0f;
             float angle = Vector3.Angle(forward, dirToTarget);
 
             if (angle <= attackAngle / 2f)
@@ -93,6 +96,8 @@ public class MeleeWeapon : MonoBehaviour
 
         if (hitCount > 0)
         {
+            // 通知准星等 UI 做命中反馈（箭头向外弹开）
+            EventBus.Emit(EventBus.ON_MELEE_HIT, hitCount);
             Debug.Log($"[MeleeWeapon] 挥砍命中 {hitCount} 个目标，伤害: {damage}，连击: {comboIndex}");
         }
     }
