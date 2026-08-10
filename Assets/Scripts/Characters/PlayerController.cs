@@ -78,6 +78,12 @@ public class PlayerController : MonoBehaviour
         // 应用动画速度配置（每个动画状态的速度由代码统一控制）
         ApplyAnimationSpeeds();
 
+        // 移动由 CharacterController 驱动，关闭 Animator 的根运动：
+        // 避免动画自身的位移/旋转（root motion）叠加到 transform 上（走路偏移、攻击双重位移）
+        // 攻击跨步位移仍由代码通过 Animator.deltaPosition 手动应用，不受影响
+        if (_currentCharacter.Animator != null)
+            _currentCharacter.Animator.applyRootMotion = false;
+
         Debug.Log($"[PlayerController] 操控角色切换为: {(character != null ? character.name : "null")}");
     }
 
