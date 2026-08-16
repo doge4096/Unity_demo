@@ -95,12 +95,12 @@ public class CharacterSelectPanel : MonoBehaviour
         if (statsText != null)
         {
             statsText.text =
-                "❤ HP: " + data.maxHealth + "\n" +
-                "⚔ 攻击: " + data.attackDamage + "\n" +
-                "🛡 防御: " + data.defense + "\n" +
-                "🏃 速度: " + data.moveSpeed.ToString("F1") + "\n" +
-                "↔ 范围: " + data.attackRange.ToString("F1") + "\n" +
-                "🗡 武器: " + data.weaponName;
+                "生命: " + data.maxHealth + "\n" +
+                "攻击: " + data.attackDamage + "\n" +
+                "防御: " + data.defense + "\n" +
+                "速度: " + data.moveSpeed.ToString("F1") + "\n" +
+                "范围: " + data.attackRange.ToString("F1") + "\n" +
+                "武器: " + data.weaponName;
         }
     }
 

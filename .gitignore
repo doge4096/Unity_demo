@@ -66,3 +66,7 @@ Assets/StreamingAssets/*.unitypackage
 # ===== 截图目录(调试用,不提交)=====
 Assets/Screenshots/
 .claude/
+
+# ===== 大资源包（Asset Store 可重新下载，不入库）=====
+Assets/UnityTechnologies/
+Assets/Art/Animations/KayKit_Character_Animations_1.1/

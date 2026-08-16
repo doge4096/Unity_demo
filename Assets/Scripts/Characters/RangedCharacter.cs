@@ -69,10 +69,10 @@ public class RangedCharacter : CharacterBase
             tempProj.Init(attackDamage, projectileSpeed, projectileLifetime, gameObject);
         }
 
-        // 动画
+        // 动画：FemaleAnimator 控制器的射击参数名是 Shoot（旧 RangedAnimator 才用 Attack）
         if (Animator != null)
         {
-            Animator.SetTrigger("Attack");
+            Animator.SetTrigger("Shoot");
         }
 
         Debug.Log($"[RangedCharacter] 发射弹道 — 伤害: {attackDamage}");

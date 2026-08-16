@@ -191,11 +191,13 @@ public class MeleeAttackVFX : MonoBehaviour
         Vector3 center = origin + forward * (fwd * 2f) + Vector3.up * midHeight;
 
         var pts = new Vector3[slashArcSegments];
+        // 竖劈弧张开角度由 slashVerticalArc 控制（默认 120°，从上到下对称）
+        float halfArc = slashVerticalArc * 0.5f;
         for (int i = 0; i < slashArcSegments; i++)
         {
-            // a：从上(90°)经前(0°)到下(-90°)，弧在竖直面内
+            // a：从 +halfArc 经 0° 到 -halfArc，弧在竖直面内
             float t = (float)i / (slashArcSegments - 1);
-            float a = Mathf.Lerp(90f, -90f, t);
+            float a = Mathf.Lerp(halfArc, -halfArc, t);
             Vector3 localDir = new Vector3(0f, Mathf.Sin(a * Mathf.Deg2Rad), Mathf.Cos(a * Mathf.Deg2Rad));
             Vector3 dir = Quaternion.LookRotation(forward) * localDir;
             pts[i] = center + dir * vRadius;
@@ -285,8 +287,9 @@ public class MeleeAttackVFX : MonoBehaviour
     {
         Color c = GetComboColor(comboIndex);
 
-        // 弹出粒子
+        // 弹出粒子（每个粒子带随机飞散速度，方向随机、大小由 hitParticleSpeed 决定）
         var particles = new System.Collections.Generic.List<GameObject>();
+        var velocities = new System.Collections.Generic.List<Vector3>();
         for (int i = 0; i < hitParticleCount; i++)
         {
             var p = GetFromPool();
@@ -297,10 +300,21 @@ public class MeleeAttackVFX : MonoBehaviour
             p.GetComponent<Renderer>().material.color = c;
             p.SetActive(true);
             particles.Add(p);
+            velocities.Add(Random.onUnitSphere * hitParticleSpeed);
         }
 
-        // 等待粒子存活时间
-        yield return new WaitForSeconds(hitParticleLifetime);
+        // 存活期间按飞散速度移动粒子
+        float elapsed = 0f;
+        while (elapsed < hitParticleLifetime)
+        {
+            elapsed += Time.deltaTime;
+            for (int i = 0; i < particles.Count; i++)
+            {
+                if (particles[i] != null)
+                    particles[i].transform.position += velocities[i] * Time.deltaTime;
+            }
+            yield return null;
+        }
 
         // 回收
         foreach (var p in particles)

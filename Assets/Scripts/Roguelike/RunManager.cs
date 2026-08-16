@@ -9,7 +9,6 @@ public class RunManager : MonoBehaviour
 {
     [Header("难度设置")]
     [SerializeField] private float difficultyScalePerRoom = 0.05f; // 每过一个房间，敌人属性 +5%
-    [SerializeField] private int roomsPerBoss = 10;                // 每 N 个房间出现 Boss
 
     [Header("引用")]
     [SerializeField] private DungeonGenerator dungeonGenerator;
@@ -87,8 +86,8 @@ public class RunManager : MonoBehaviour
     /// <summary>在房间内生成敌人</summary>
     private void SpawnEnemiesInRoom(RoomNode room)
     {
-        // 根据难度决定敌人数
-        int baseEnemies = Random.Range(1, 5);
+        // 根据难度决定敌人数（基础数量取 DungeonGenerator 配置的房间敌人数范围）
+        int baseEnemies = Random.Range(dungeonGenerator.MinEnemiesPerRoom, dungeonGenerator.MaxEnemiesPerRoom + 1);
         int count = Mathf.RoundToInt(baseEnemies * _difficultyMultiplier);
         count = Mathf.Clamp(count, 1, 8);
 

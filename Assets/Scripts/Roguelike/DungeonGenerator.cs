@@ -24,6 +24,10 @@ public class DungeonGenerator : MonoBehaviour
     [SerializeField] private int maxEnemiesPerRoom = 5;
     [SerializeField] private int minEnemiesPerRoom = 1;
 
+    /// <summary>每房间敌人数范围（供 RunManager 生成敌人时使用）</summary>
+    public int MinEnemiesPerRoom => minEnemiesPerRoom;
+    public int MaxEnemiesPerRoom => maxEnemiesPerRoom;
+
     [Header("调试")]
     [SerializeField] private bool showDebugGizmos = true;
 
@@ -293,7 +297,7 @@ public class DungeonGenerator : MonoBehaviour
                 foreach (var tile in room.Corridor)
                 {
                     Vector3 pos = new Vector3(tile.x + 0.5f, 0.05f, tile.y + 0.5f);
-                    Gizmos.DrawCube(pos, new Vector3(0.8f, 0.05f, 0.8f));
+                    Gizmos.DrawCube(pos, new Vector3(corridorWidth * 0.4f, 0.05f, corridorWidth * 0.4f));
                 }
             }
         }

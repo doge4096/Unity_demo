@@ -16,7 +16,6 @@ public class PlayerController : MonoBehaviour
     [Header("跳跃设置")]
     [SerializeField] private float jumpHeight = 2f;            // 跳跃高度（米），调大 = 空中更久
     [SerializeField] private float gravity = -12f;             // 重力加速度，调小 = 下落更慢
-    [SerializeField] private float groundedCheckOffset = 0.02f; // 着地检测微小偏移（小=落地判定更准，防提前播落地动画）
     [SerializeField] private LayerMask groundLayer = ~0;       // 地面层
     [SerializeField] private float landingDuration = 0.4f;     // 落地动画预估时长（秒）
     [SerializeField] private int maxJumps = 2;                 // 最大跳跃次数（2 = 二段跳）
@@ -48,12 +47,18 @@ public class PlayerController : MonoBehaviour
 
     // 冲刺（Shift 切换开关）
     private bool _isSprinting;                      // 当前是否冲刺
-    private const float SprintMultiplier = 2.4f;    // 冲刺速度倍率（普通 2.5 × 2.4 ≈ 6，匹配跑步动画）
-    [SerializeField] private float sprintAnimSpeed = 1.2f;  // 冲刺时的动画播放速度（走路 1.0 → 冲刺此值，可调）
+    private const float SprintMultiplier = 2.4f;    // 冲刺速度倍率（走路 2.0 × 2.4 ≈ 4.8，匹配跑步动画 4.3 m/s）
+    [SerializeField] private float sprintAnimSpeed = 1.2f;  // 冲刺时的动画播放速度（走路 0.6 → 冲刺此值，可调）
     private const float WalkAnimSpeed = 0.4f;       // 走路动画 Speed 参数（落在 Walk 状态区间 0.1~0.5 内）
+    [SerializeField] private float walkPlaybackSpeed = 0.6f; // 走路时动画播放倍速（Walk 状态播持枪跑步动画 rifle run，降速让步频像走路；默认 0.6 起步，以脚不滑为准目视微调）
 
     // 瞄准（远程）
     private bool _isAiming;                         // 远程角色瞄准中（角色面向相机方向）
+
+    // 射击后瞄准保持（远程）：射击后即使松开右键，也保持拿枪瞄准姿势一段时间，期间不射击则恢复普通姿势
+    [Header("射击后瞄准保持（远程）")]
+    [SerializeField] private float aimHoldDuration = 3f;  // 射击后保持瞄准的秒数（每开一枪重置）
+    private float _aimHoldTimer;                          // 剩余保持时间（>0 时强制保持瞄准）
 
     // Animator 参数 ID 缓存（比字符串快）
     private static readonly int SpeedParam = Animator.StringToHash("Speed");
@@ -76,6 +81,7 @@ public class PlayerController : MonoBehaviour
         _currentCharacter = character;
         _verticalVelocity = 0f;
         _isLanding = false;
+        _aimHoldTimer = 0f;   // 切换角色时清除射击后瞄准保持
 
         // 应用动画速度配置（每个动画状态的速度由代码统一控制）
         ApplyAnimationSpeeds();
@@ -98,12 +104,27 @@ public class PlayerController : MonoBehaviour
         // 攻速：三段攻击动画速度交给角色（乘攻速倍率后写入 AttackSpeed 参数，道具加攻速时角色自己 RefreshAttackSpeed）
         _currentCharacter.AttackAnimSpeeds = new float[] { attack1AnimSpeed, attack2AnimSpeed, attack3AnimSpeed };
         _currentCharacter.RefreshAttackSpeed();
-        anim.SetFloat("JumpSpeed", jumpAnimSpeed);
-        anim.SetFloat("BlockSpeed", blockAnimSpeed);
-        anim.SetFloat("HitSpeed", hitAnimSpeed);
-        anim.SetFloat("DieSpeed", dieAnimSpeed);
-        anim.SetFloat("ShootSpeed", shootAnimSpeed);
-        anim.SetFloat("AimSpeed", aimAnimSpeed);
+
+        // 各速度参数按存在性设置：FemaleAnimator 统一用 AnimSpeed，没有分项速度参数（避免 SetFloat 刷警告）
+        SetFloatIfExists(anim, "JumpSpeed", jumpAnimSpeed);
+        SetFloatIfExists(anim, "BlockSpeed", blockAnimSpeed);
+        SetFloatIfExists(anim, "HitSpeed", hitAnimSpeed);
+        SetFloatIfExists(anim, "DieSpeed", dieAnimSpeed);
+        SetFloatIfExists(anim, "ShootSpeed", shootAnimSpeed);
+        SetFloatIfExists(anim, "AimSpeed", aimAnimSpeed);
+    }
+
+    /// <summary>仅在参数存在时写入（控制器缺少该参数时跳过，防刷警告）</summary>
+    private static void SetFloatIfExists(Animator anim, string paramName, float value)
+    {
+        foreach (var p in anim.parameters)
+        {
+            if (p.name == paramName)
+            {
+                anim.SetFloat(paramName, value);
+                return;
+            }
+        }
     }
 
     private void Update()
@@ -254,17 +275,30 @@ public class PlayerController : MonoBehaviour
             {
                 _currentCharacter.Animator.SetFloat(SpeedParam, (_isSprinting && !blocking) ? 1f : WalkAnimSpeed);
 
-                // 动画播放速度随实际移动速度变化：走路 1.0 倍 → 冲刺 sprintAnimSpeed 倍（线性插值）
+                // 动画播放速度随实际移动速度变化：走路 walkPlaybackSpeed 倍 → 冲刺 sprintAnimSpeed 倍（线性插值）
+                // 走路 0.6 倍速慢放持枪跑步动画（rifle run），步频接近走路；冲刺 1.2 倍速正常跑步
                 float sprintSpeed = _currentCharacter.MoveSpeed * SprintMultiplier;
-                float animSpeed = Mathf.Lerp(1f, sprintAnimSpeed,
+                float animSpeed = Mathf.Lerp(walkPlaybackSpeed, sprintAnimSpeed,
                     Mathf.InverseLerp(_currentCharacter.MoveSpeed, sprintSpeed, currentSpeed));
                 _currentCharacter.Animator.SetFloat(AnimSpeedParam, animSpeed);
 
-                // 远程角色瞄准移动方向（AimMove Blend Tree 用）
+                // 远程角色瞄准移动方向（AimWalk 2D 混合树用）：
+                // 瞄准时：角色面向相机，用真实移动方向在角色本地空间的投影驱动方向混合（可斜向走）
+                // 非瞄准走路：角色面向移动方向（上方已旋转到 targetAngle），动画应恒为前向，
+                //   避免角色朝向平滑旋转滞后时 localMoveDir 产生横向分量 → 混合树斜向混合 → 走路朝向偏
                 if (_currentCharacter is RangedCharacter)
                 {
-                    _currentCharacter.Animator.SetFloat(AimXParam, horizontal);
-                    _currentCharacter.Animator.SetFloat(AimZParam, vertical);
+                    if (_isAiming)
+                    {
+                        Vector3 localMoveDir = _currentCharacter.transform.InverseTransformDirection(moveDir.normalized);
+                        _currentCharacter.Animator.SetFloat(AimXParam, localMoveDir.x);
+                        _currentCharacter.Animator.SetFloat(AimZParam, localMoveDir.z);
+                    }
+                    else
+                    {
+                        _currentCharacter.Animator.SetFloat(AimXParam, 0f);
+                        _currentCharacter.Animator.SetFloat(AimZParam, 1f);
+                    }
                 }
             }
         }
@@ -273,7 +307,15 @@ public class PlayerController : MonoBehaviour
             cc.Move(Vector3.up * _verticalVelocity * Time.deltaTime);
 
             if (_currentCharacter.Animator != null)
+            {
                 _currentCharacter.Animator.SetFloat(SpeedParam, 0f);
+                // 没有移动时清零瞄准方向，避免混合树残留上一帧方向（防止停步后再次移动时方向跳变）
+                if (_currentCharacter is RangedCharacter)
+                {
+                    _currentCharacter.Animator.SetFloat(AimXParam, 0f);
+                    _currentCharacter.Animator.SetFloat(AimZParam, 0f);
+                }
+            }
         }
     }
 
@@ -294,6 +336,10 @@ public class PlayerController : MonoBehaviour
         FaceMouseDirection();
 
         _currentCharacter.PerformAttack();
+
+        // 远程角色射击后重置瞄准保持计时（每开一枪重新计时，期间松开右键也保持拿枪姿势）
+        if (_currentCharacter is RangedCharacter)
+            _aimHoldTimer = aimHoldDuration;
     }
 
     /// <summary>让角色面向鼠标在屏幕上的方向</summary>
@@ -328,15 +374,20 @@ public class PlayerController : MonoBehaviour
         // 远程角色：右键瞄准（放大镜头 + 瞄准动画），不做格挡
         if (_currentCharacter is RangedCharacter)
         {
-            _isAiming = holding;
+            // 射击后瞄准保持：计时器>0 时即使松开右键也保持瞄准姿势（拿枪），归零后恢复普通姿势
+            if (_aimHoldTimer > 0f)
+                _aimHoldTimer = Mathf.Max(0f, _aimHoldTimer - Time.deltaTime);
+
+            bool effectiveAiming = holding || _aimHoldTimer > 0f;
+            _isAiming = effectiveAiming;
             _currentCharacter.IsBlocking = false;
             if (cameraTransform != null)
             {
                 var cam = cameraTransform.GetComponent<ThirdPersonCamera>();
-                if (cam != null) cam.SetAiming(holding);
+                if (cam != null) cam.SetAiming(effectiveAiming);
             }
             if (_currentCharacter.Animator != null)
-                _currentCharacter.Animator.SetBool(IsAimingParam, holding);
+                _currentCharacter.Animator.SetBool(IsAimingParam, effectiveAiming);
             return;
         }
 

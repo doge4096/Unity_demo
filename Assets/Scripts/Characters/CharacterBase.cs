@@ -10,7 +10,7 @@ public abstract class CharacterBase : MonoBehaviour, IDamageable
     [Header("基础属性")]
     [SerializeField] protected int maxHealth = 100;
     [SerializeField] protected int attackDamage = 15;
-    [SerializeField] protected float moveSpeed = 5f;
+    [SerializeField] protected float moveSpeed = 2f; // 走路移动速度（匹配走路动画步速 ~2 m/s，脚不滑；冲刺 × 2.4）
     [SerializeField] protected float attackRange = 2f;
     [SerializeField] protected float attackCooldown = 0.5f;
     [SerializeField] protected float defense = 0f;
@@ -79,8 +79,20 @@ public abstract class CharacterBase : MonoBehaviour, IDamageable
     /// <summary>攻速倍率变化后调用：重算 AttackSpeed 动画参数（动画播放速度跟随攻速）。默认按第1段速度，子类可覆写按当前段设置</summary>
     public virtual void RefreshAttackSpeed()
     {
-        if (Animator != null && attackAnimSpeeds.Length > 0)
+        if (Animator == null || attackAnimSpeeds.Length == 0) return;
+        // 控制器没有 AttackSpeed 参数时跳过（远程角色 FemaleAnimator 用的是 AnimSpeed，不写 AttackSpeed 防刷警告）
+        if (HasAnimatorParameter(Animator, "AttackSpeed"))
             Animator.SetFloat("AttackSpeed", attackAnimSpeeds[0] * attackSpeedMultiplier);
+    }
+
+    /// <summary>检查 Animator 是否存在指定参数（避免 SetFloat 不存在的参数刷警告）</summary>
+    private static bool HasAnimatorParameter(Animator anim, string paramName)
+    {
+        foreach (var p in anim.parameters)
+        {
+            if (p.name == paramName) return true;
+        }
+        return false;
     }
 
     public int CurrentHealth => currentHealth;
