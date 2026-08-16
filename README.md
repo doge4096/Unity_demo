@@ -51,3 +51,12 @@ Assets/
 1. 使用 Unity 2022.3 打开项目
 2. 打开 `Assets/Scenes/SampleScene.unity`
 3. 点击 Play，选择角色开始游戏
+
+## 更新日志
+
+### 2026-08-16（第十八轮）
+
+- **走路动画**：改用持枪跑步动画 female_aimRun_fixed 降速播放——移动速度线性驱动播放倍速（走路 0.6 倍 → 冲刺 1.2 倍，PlayerController 的 walkPlaybackSpeed 可调），步频接近真实走路，不再用独立的走路动画
+- **瞄准走路修复**：重建 AimWalk 2D 混合树（AimX/AimZ 驱动，中心前向 + 前/右/后/左四方向动画），修复瞄准时往左/右/后移动动画不播放的问题；工具：「工具/走路换持枪跑步并修复瞄准走路」
+- **待机动画**：AimIdle 状态使用 female_aimIdle_fixed
+- **资产**：Adam 角色包、KayKit 动画包不入库（.gitignore）
