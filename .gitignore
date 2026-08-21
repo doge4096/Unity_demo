@@ -70,3 +70,9 @@ Assets/Screenshots/
 # ===== 大资源包（Asset Store 可重新下载，不入库）=====
 Assets/UnityTechnologies/
 Assets/Art/Animations/KayKit_Character_Animations_1.1/
+
+# ===== 个人文档（指南/计划/交接，不入库）=====
+# 根目录新增 .md 文档默认忽略；README.md / claude.md 例外保留
+/*.md
+!/README.md
+!/claude.md
